@@ -75,5 +75,55 @@
 
 
 # Custom Generic Views:
-	- There are situations where generic views might not work for us.
-	- 
+	- There are situations where generic views might not work for us. So sometimes we have to customize it.
+	- Our "ProductDetailView" provides three operations --->> GET, PUT and DELETE.
+	- A generic class for such three operations is "RetrieveUpdateDestroyAPIView"
+	- Like above we will pas it two attributes. "queryset" and "serializer_class"
+	- And now we do NOT need to write method of "get" and "put" as all of that logic is completely implemented in class "RetrieveUpdateDestroyAPIView"
+	which we have inherited.
+
+	- But our "DELETE" method in "ProductDetailView" has a little different logic than in the class "RetrieveUpdateDestroyAPIView". We have some logic that is specific to our application.
+	- So here we need to override the "delete" method that we have inherited from "RetrieveUpdateDestroyAPIView" class. 
+	- That is how we can customize generic views.
+
+	- While testing this view, we get an error which says:
+	- Expected view ProductDetail to be called with a URL keyword argument named "pk". Fix your URL conf, or set the `.lookup_field` attribute on the view correctly.
+
+	- In the url of product detail view, we have given our product id as "id" but out generic view expects it to be "pk". So change it.
+	- path('products/<int:pk>/', views.ProductDetail.as_view())
+
+	- Or if you want this to stay as "id", you can set another attribute in your class "lookup_field"
+	- lookup_field = "id"
+
+	- If you are setting this to 'pk' then in 'delete' method change 'id' to 'pk'.
+
+
+# ViewSets:
+	- Currently we have two views for managing our products. "ProductList" and "ProductDetail".
+	- If paid close attention, we have some duplication acoss these classes. 
+	- serializer_class is same in both cases, and queryset is almost same too with a slight difference. We can remove that difference. As do not need to use collection in our Products API.
+	- Now our querysets are identical too.
+	- Now we have more duplication.
+	- And this is we use "ViewSets".
+	- Using a "ViewSet", we can combine the logic for multiple related views inside a single class. Its a set of related views.
+
+	- First import ModelViewSet class.
+	- from rest_framework.viewsets import ModelViewSet
+
+	- "ModelViewSet" class has multiple has multiple base classes. All the mixins class as well as "GenericViewSet" class.
+	- Everything we have learned about "GenericViews" also exist in "GenericViewSet" class.
+	- Create a new class "ProductViewSet"  --->> naming convention = Model class name followed by ViewSet.
+	- This class should inherit from "ModelViewSet".
+	- Because this is also a generic view, here we have "querset" and "serializer_class" attributes and methods too.
+	- Now add "queryset" and "serializer_class" attribute and add "get_serializer_context" method.
+	- And from "ProductDetail" class, add "delete" method here too.
+	- And now you do NOT need both "ProductList" and "ProductDetail" classes.
+	- And we are left with "ProductViewSet" class that combines the logic for multiple views.
+	- And now we have a single class for implementing the "/products" endpoint.
+	- Using this single class, we can list our products, create them, update them and delete them. (A benefit of using ViewSet)
+
+	- But for ViewSet we need to use routers for the urls. (Next Lecture)
+
+	- If we inherit from "ModelViewSet" class we can perform all kind of operations on a resource. e.g., Listing resource, Create resource, Update resource and delete resource.
+	- But if you do NOT want to have write operations like creating/updating/deleting etc and just want to be able to read a resource only then you can inherit from another class "ReadOnlyModelViewSet".
+	- If we inherit from "ReadOnlyModelViewSet" class, we can only perform read operations. List all objects or a single object. 
