@@ -127,3 +127,111 @@
 	- If we inherit from "ModelViewSet" class we can perform all kind of operations on a resource. e.g., Listing resource, Create resource, Update resource and delete resource.
 	- But if you do NOT want to have write operations like creating/updating/deleting etc and just want to be able to read a resource only then you can inherit from another class "ReadOnlyModelViewSet".
 	- If we inherit from "ReadOnlyModelViewSet" class, we can only perform read operations. List all objects or a single object. 
+
+
+# Routers:
+	- When we use ViewSets, we are not  going to explicitly register URL patterns, this will be done by router.
+	- We will register our ViewSets with a router and the router will take care of generating these URL patterns for us.
+
+	- SIMPLE ROUTER:
+
+	- from rest_framework.routers import SimpleRouter
+	- router = SimpleRouter()
+	- router.register('products', views.ProductViewSet)              --->> define an endpoint and give it a viewset.
+	- router.register('collections', views.CollectionViewSet)
+
+	- Now all the urls are created in "router.url". If you print  router.url you will get the following array.
+
+	- [
+		<URLPattern '^products/$' [name='product-list']>,
+		<URLPattern '^products/(?P<pk>[^/.]+)/$' [name='product-detail']>,
+		<URLPattern '^collections/$' [name='collection-list']>,
+		<URLPattern '^collections/(?P<pk>[^/.]+)/$' [name='collection-detail']>
+		]
+
+	- Set your urlpatterns equal to this array
+	- urlpatterns = router.urls
+
+	- Say you have more URL patterns than those are defined by the "router.urls". Then You can use following code.
+	
+	- 	urlpatterns = [
+    		path('', include(router.urls)),
+     		Here define your URL patterns which are not defined by router.urls
+     		]
+
+    - DEFAULT ROUTER:
+    - Using DefaultRouter, You get two additional features:
+    - You get an additional page called ApiRoot @ "http://127.0.0.1:8000/store/"
+    - And here you can see various endpoints that are available to us.
+    
+    - 2nd feature: 
+    - If you send request to an API endpoint and append ".json" at the end. You get all your data in JSON format.
+    - "http://127.0.0.1:8000/store/products.json" -->> At this endpoint you will get all your products in JSON format,		
+
+    - from rest_framework.routers import DefaultRouter
+    - router = DefaultRouter()
+	- router.register('products', views.ProductViewSet)              --->> define an endpoint and give it a viewset.
+	- router.register('collections', views.CollectionViewSet)
+
+	- Now all the urls are created in "router.url". If you print router.url you will get the following array.
+
+
+    - [
+    	<URLPattern '^products/$' [name='product-list']>,
+    	<URLPattern '^products\.(?P<format>[a-z0-9]+)/?$' [name='product-list']>,
+    	<URLPattern '^products/(?P<pk>[^/.]+)/$' [name='product-detail']>,
+    	<URLPattern '^products/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$' [name='product-detail']>,
+    	<URLPattern '^collections/$' [name='collection-list']>,
+    	<URLPattern '^collections\.(?P<format>[a-z0-9]+)/?$' [name='collection-list']>,
+    	<URLPattern '^collections/(?P<pk>[^/.]+)/$' [name='collection-detail']>,
+    	<URLPattern '^collections/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$' [name='collection-detail']>,
+    	<URLPattern '^$' [name='api-root']>,
+    	<URLPattern '^\.(?P<format>[a-z0-9]+)/?$' [name='api-root']>
+    ]
+
+    - PROBLEM:
+    - At "http://127.0.0.1:8000/store/products" this endpoint you also see "DELETE" button now which is meant to only show for individual products but not for all of them.
+    - In our ViewSets, we should NOT override the "delete" rather we should override "destroy" method.
+    - The "delete" method in "RetrieveUpdateDestroyAPIView" also uses "destroy" method.
+
+    - Replace "delete" method of your "ViewSets" with following "destroy" method.
+
+
+# Building Reviews API:
+	- Now we will Introduce Reviews.
+	- A given product can have multiple reviews:         ----------->>>>        "http://127.0.0.1:8000/store/products/2/reviews"
+	- And we should be able to access individual Reviews like this: -------->>> "http://127.0.0.1:8000/store/products/2/reviews/1"
+	- Here we have nested Resources, so we need to talk about nested routers.
+	- But before that we need to build our model. "Reviews" Model 
+
+	- 3 Steps for creating a model:
+	1) Create a Model Class.
+	 	class Review(models.Model):
+    		product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    		name = models.CharField(max_length=255)
+    		description = models.TextField()
+    		date = models.DateField(auto_now_add=True)  
+	 		Create a migration
+	
+	2) Create Migration. 
+	- Run the following command in the termial:
+	- python manage.py makemigrations
+
+	3) Apply Migration. 
+	- Run the following command in the termial:
+	- python manage.py migrate
+
+	- 3 steps for buildind an API:
+	1) Create a Serializer Class.
+		class ReviewSerializer(serializers.ModelSerializer):
+    		class Meta:
+        		model = Review
+        		fields = ['id', 'date', 'name', 'description', 'product']
+
+	2) Create a view
+		class ReviewViewSet(ModelViewSet):
+    		queryset = Review.objects.all()
+    		serializer_class = ReviewSerializer
+
+	3) Register a route  (Either using a router (For ViewSets) or by explicitly registering a URL pattern object)
+		- NEXT LECTURE.
