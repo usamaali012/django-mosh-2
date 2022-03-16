@@ -235,3 +235,292 @@
 
 	3) Register a route  (Either using a router (For ViewSets) or by explicitly registering a URL pattern object)
 		- NEXT LECTURE.
+
+
+# Nested Routers:
+	- First, we need to install djangoRestFramework nested-routers.
+	
+	- pip install drf-nested-routers           (For installing globally)
+	- pipenv install drf-nested-routers        (For installing only in venv)
+
+	- Just like we have "SimpleRouter" we also have "NestedSimpleRouter". which we can get from following import.
+
+	- from rest_framework_nested import routers
+
+	- In this module, we have a bunch of router classes.
+	- Here we also have "DefaultRouter", "SimpleRouter" just as before and they replaces the classes imported from "rest_framework".
+	- They behave the same way as before.
+	- We also have "NestedDefaultRouter", "NestedSimpleRouter"
+	- "NestedDefaultRouter"
+	- We have to pass 3 arguments to this nested function.
+	- the parent router, parent prefix, and lookup parameter.
+	- Having a lookup means we will have a paremeter in our url with name "lookup_pk" (Here, "lookup" is defined by us.)
+
+	router = routers.DefaultRouter()
+	router.register('products', views.ProductViewSet)
+	router.register('collections', views.CollectionViewSet 
+	products_router = routers.NestedDefaultRouter(router, 'products', lookup='product')          ---------Nested route with 3 paramenters
+
+	- Now we will register this child route as we did for parent routes.
+	- Now, in register, we will give 3 arguments.
+	- An endpoint, and a mapping class/function to deal with that endpoint (As before)
+	- And finally, a 'basename', which is used as a prefix for generating the name of url patterns.
+
+	products_router.register('reviews', views.ReviewViewSet, basename='product-reviews')
+
+	- So, our routes will be, "product-reviews/list" and "product-reviews/detail"
+	- Now that we have both parent and child routers, we can combine urls of both these routers and store them in "urlpatterns" object.
+
+	urlpatterns = router.urls + products_router.urls
+
+	- Alternatively, if you set "urlpatterns" to an array, where you have explicit routes, you can use the "include" function to include the urls of these routers.
+
+	- Right now, while creating a review, we explicitly have to assign the product_id.
+
+	{
+    	"name": "",
+    	"description": "",
+    	"product": null
+	}
+
+	- But this should NOT be the case, we should get the product_id from our url. We do NOT want to pass the product_id in the request body rather we need to read it from the url.
+
+	- To do that, go back to "ReviewSerializer" class, if you remove the 'prodcut' from the array of "fields" and in then in the request body you do NOT assign a product_id then you will get an error saying "product_id cannot be null"
+	- This serializer class methods for creating/updating reviews and while creating a review it will take all the values defined in the field array and use them to set the values of Review object.
+	- ANd now here we do NOT have product_id field (Removed it)
+
+	- PROBLEM SOLVING:
+	- In our "ReviewViewSet" class we have access to url parameters. and we can read the product_id from the url and using a context object we can pass it to the Serializer.
+	- We use "context" object to provide additional data to the serializer.
+	- So we will override "get_serializer_context()" method and return dictionary.
+	- Our urls has two parameters "product_pk" contains product_id and "pk" for review_id.
+
+	def get_serializer_context(self):
+        return {'product_id': self.kwargs['product_id']}
+
+    - Now that we have access to product_id, now we will override the create method in our serializer class of review.
+
+    def create(self, validated_data):
+        product_id = self.context['product_id']
+        return Review.objects.create(product_id=product_id, **validated_data)
+
+    - Now using this we can successfully create a review without assigning the product_id
+
+    - But now a problem remains:
+    - all the reviews that have been created so far are showing for every product even though they do NOT belong to them.
+    - this is because in "ReviewViewSet" class we have set our queryset to all.
+
+    queryset = Review.objects.all()
+
+    - So all reviews are returned no matter what product we are on.
+    - here instead of setting "queryset" attribute we will override "get_queryset" method.
+
+    def get_queryset(self):
+        return Review.objects.filter(product_id=self.kwargs['product_pk'])
+
+    - Now this will solve that problem.
+
+
+# Filtering:
+	- Currenlty when we hit "products" endpoint we get all products from our database.
+	- What if we want to filter these products, (e.g., by a specific collection).
+	- We should be able to pass a query string parameter like "collection_id" (?collection_id=1) and then we should only see products in collection 1.
+	- In "ProductViewSet" we have a query set to get all the products
+
+	queryset = Product.objects.all()
+
+	- So again here instead of setting "queryset" attribute we will override "get_queryset" method.
+
+	def get_queryset(self):
+        queryset = Product.objects.all()
+        collection_id = self.request.query_params['collection_id']
+        if collection_id is not None:
+            queryset = queryset.filter(collection_id=collection_id)
+        return queryset
+
+    - "query_params" is a dictionary.
+    -  By the above we get following error:
+
+    - `basename` argument not specified, and could not automatically determine the name from the viewset, as it does not have a `.queryset` attribute.
+
+    - As we have removed "queryset" attribute from our class django_rest_framework is unable to figure out the "basename"
+    - We defined "basename" in the urls.py while registering the route.
+    - This "basename" is used to generate the name of our url patterns.
+    - By default "djangoRestFramework" uses the queryset attribute to figure out the basename.
+    - But now we have deleted queryset attribute and have a method django_rest_framework cannot figure what the "basename" should be called based on the logic we defined in that method.
+    - So, for "products" we have to explicitly define the "basename"
+
+    router.register('products', views.ProductViewSet, basename='products')
+
+    - With this we will have 2 urlpatterns ==== "products-list" and "products-detail" ---- "products" is just a prefix.
+
+    - Now we get another error:  "MultiValueDictKeyError at /store/products/   collection_id" 
+    - Here, if you pass a "collection_id" as query_parameters the error will go away.
+    - Access you dictionary key "collection_id" using "get()" method. ANd the error will go away.
+
+    collection_id = self.request.query_params.get('collection_id')
+
+
+
+# Generic Filtering:
+	- What if we want to filter product by some other field, we will need to use more complicated code.
+	- There is a third party library called "django-filter", there we can filter any model by any field. 
+
+	- pip install django-filter                     (For installing globally)
+	- pipenv install django-filter                  (For installing only in venv)
+
+	- Also add it in the list of installed apps.   ('django_filters')   -------- Name of the app differ from name of the library  (django-filter >>>>>> django_filters)
+	
+	from django_filters.rest_framework import DjangoFilterBackend
+
+	- 'DjangoFilterBackend' gives us generic filtering
+	- Add the followin attribute to your class.
+
+	filter_backends = [DjangoFilterBackend]
+
+	- With this backend all we have to do is specifr what field we want to use for filtering.
+
+	filterset_fields = ['collection_id']
+
+	- Now with that you do NOT need all that logic that you have defined in the previous lecture for "collection_id".
+	- With this filtering, we can filter our products using query_parameters as well as we get a button "Filters" where we can easily select a collection.
+	- Want to filter using another field, just pass it in "filterset_fields" and it willbe done.
+
+	- When we pass "unit_price" as a field for filtering, it will ask us to give us the exact amount for which you want to finf products.
+	- Bit we want to filter our ptoducts for a price range not just a single price.
+	- This is where we will need to use a custom filter (will not be taught in this course)
+	- Look at the documentation of django-filter library.
+	- There you can find all the details about creating a custom filter.
+
+	- Add a new file "filters.py" in store app.
+	
+	from django_filters.rest_framework import FilterSet
+
+	- Create a class "ProductFilter" which should inherit "FilterSet".
+	- Add another class Meta where you will define model and fields for the filtering.
+	- fields will be a dictionary, and there, for each field we can specify how the filtering should be done.
+	- 'exact' for exact filtering
+	- For a range, use less than an greate than ['lt', 'gt']
+	- A special language that this library understands.
+	- For more details, look at the documentation
+
+	- Now in our "ProductViewSet" class, instead of using, 'filterset_fields' we will use 'serializer_class' and set this equal to our filter class.
+
+
+# Searching:
+	- If you want to find product by title or description, you should use Searching.
+	- Searching is for text-based fields.
+
+	from rest_framework.filters import SearchFilter
+
+	- In the "filter_backends" array add this "SearchFilter"
+
+	filter_backends = [DjangoFilterBackend, SearchFilter
+
+	- Add another array "search_fields" and set this equal to the list of fields you want to use for Searching
+
+	search_fields = ['name', 'description'] 
+
+	- We can also reference field of the related classes using double underscore 'collection__title'
+	- Now in our browsableApi, in filter button we also have a search field.
+	- This search is case-sensitive.
+
+
+# Sorting:
+	from rest_framework.filters import OrderingFilter
+
+	- import from the same module as before. Add this in "filter_backends" array.
+
+	filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+	- Add another array "ordering_fields" and set this equal to the list of fields you want to use for Sorting.
+
+	ordering_fields = ['unit_price', 'last_updated']
+
+	- You will get some ways of sorting your data in filter.
+	- You can also modify your queryset for sorting here.
+
+	- The queryset for ascending unit_price is "?ordering=unit_price"
+	- The queryset for descending unit_price is "?ordering=-unit_price"
+
+	- This will not let you sort your data a with more than one criteria.
+	- So for that you can modify your url yourself.    ----------- '?ordering=-unit_price,last_update'
+
+	- What is interesting about above query parameter is, currently we are not returning last_update from our API
+	- And even though we are NOT returning it here, we can still use it for sorting data.
+
+
+# Pagination:
+	from rest_framework.pagination import PageNumberPagination
+
+	- Using this class we can paginate our data using page number.
+	- Add an attribute in your class 'pagination_class' and set this equal to  "PageNumberPagination"
+
+	pagination_class = PageNumberPagination
+
+	- Now we need to specify our pagesize.
+	- For that we need to go to "setting.py"
+	- In the settings of "REST_FRAMEWORK" set page size to 10
+
+	REST_FRAMEWORK = {
+    	'COERCE_DECIMAL_TO_STRING': False,
+    	'PAGE_SIZE': 10,
+	}
+
+	- Now if you refresh your page, you will see a slightly different result.
+	- Instead of an array of object, we get an object with some properties.
+	- "count"  ---- for total no of results
+	- "next"   ---- link to the next page   	(null in case of last page)
+	- "previous" -- link to the previous page   (null in case of first page)
+	- "results"  -- an array of our results.
+
+	- We have set this pagination in our "ProductViewSet" class only, it will not be in other endpounts.
+	- If you want to set it globally modify REST_FRAMEWORK dict in settings.py and add this:
+	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination'
+
+	REST_FRAMEWORK = {
+    	'COERCE_DECIMAL_TO_STRING': False,
+    	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    	'PAGE_SIZE': 10,
+	}
+
+	- With this you will not need to set this per viewset, it will be set globally for every class.
+
+	- Now we have another pagination class called "LimitOffsetPagination", so instead of using the page number we use a limit and an offset value.
+	- Change pagination class to "LimitOffsetPagination"
+
+	REST_FRAMEWORK = {
+		'COERCE_DECIMAL_TO_STRING': False,
+    	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    	'PAGE_SIZE': 10,
+	}
+
+	- Now in our query set parameter, we have limit and offset instead of page number.
+
+	- If we do NOT want to apply this globally and remove 'DEFAULT_PAGINATION_CLASS' from "settings.py" we get following warning:
+
+	?: (rest_framework.W001) You have specified a default PAGE_SIZE pagination rest_framework setting, without specifying also a DEFAULT_PAGINATION_CLASS.
+        HINT: The default for DEFAULT_PAGINATION_CLASS is None. In previous versions this was PageNumberPagination. If you wish to define PAGE_SIZE globally whilst defining pagination_class on a per-view basis you may silence this check.
+
+    - This is because we remove 'DEFAULT_PAGINATION_CLASS' and left the 'PAGE_SIZE' there.
+    - We can either supppress this warning oe create a custom pagination class and set page size there. We will create a custom class.
+
+    - Add a new file , "pagination.py" ---- import "PageNumberPagination"
+    
+    from rest_framework.pagination import PageNumberPagination
+    
+    - Create a custom class "DefaultPagination" which will inherit from "PageNumberPagination"
+    - And there set page_size = 10
+
+    class DefaultPagination(PageNumberPagination):
+    	page_size = 10
+
+    - Remove 'PAGE_SIZE' from 'settings.py'
+    - And in "ProductViewSet" class in change "pagination_class" to this custom class.
+
+    pagination_class = DefaultPagination
+
+
+
+
+ 
