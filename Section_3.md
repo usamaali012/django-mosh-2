@@ -519,6 +519,7 @@
     - And in "ProductViewSet" class in change "pagination_class" to this custom class.
 
     pagination_class = DefaultPagination
+    
 
 
 
